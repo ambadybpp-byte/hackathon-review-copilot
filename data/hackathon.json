@@ -1,0 +1,63 @@
+{
+  "name": "BYT 24-Hour Hackathon",
+  "finalist_count": 30,
+  "problem_statements": [
+    {
+      "id": "BYT01",
+      "title": "Money-Laundering Networks",
+      "description": "Identifying and Tracing Coordinated Money-Laundering Networks Across Financial Institutions Using Transactional and Temporal Patterns"
+    },
+    {
+      "id": "BYT02",
+      "title": "Disease Progression",
+      "description": "Reconstructing Longitudinal Disease Progression and Identifying Early Signs of Patient Deterioration from Fragmented Clinical Records"
+    },
+    {
+      "id": "BYT03",
+      "title": "Programming Misconceptions",
+      "description": "Identifying Hidden Programming Misconceptions from Student Coding and Debugging Behavior to Enable Adaptive, Personalized Learning"
+    },
+    {
+      "id": "BYT04",
+      "title": "Multi-Stage Cyberattacks",
+      "description": "Reconstructing Multi-Stage Cyberattacks and Anticipating Lateral Movement by Correlating Fragmented Security Telemetry Across Networked Systems"
+    },
+    {
+      "id": "BYT05",
+      "title": "Urban Infrastructure Failures",
+      "description": "Predicting Cascading Failures Across Interconnected Urban Infrastructure and Optimizing Emergency Interventions Under Disruptive Conditions"
+    },
+    {
+      "id": "OPEN",
+      "title": "Open Challenge",
+      "description": "Open innovation challenge where teams may propose their own problem and solution."
+    }
+  ],
+  "rubric": [
+    {
+      "id": "problem_relevance",
+      "name": "Problem Identification & Relevance",
+      "weight": 20
+    },
+    {
+      "id": "innovation",
+      "name": "Innovation & Originality",
+      "weight": 25
+    },
+    {
+      "id": "technical",
+      "name": "Technical Approach & Feasibility",
+      "weight": 20
+    },
+    {
+      "id": "impact",
+      "name": "Practical Impact & Applicability",
+      "weight": 20
+    },
+    {
+      "id": "presentation",
+      "name": "Presentation & Clarity",
+      "weight": 15
+    }
+  ]
+}
