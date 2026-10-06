@@ -1,31 +1,19 @@
 from pathlib import Path
 import shutil
+from typing import List
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from .extractor import extract_document
 from .classifier import classify_submission
-
-
-# ============================================================
-# APP CONFIGURATION
-# ============================================================
+from .evaluator import evaluate_submission
 
 app = FastAPI(
     title="Hackathon Review Copilot",
-    description=(
-        "AI-assisted hackathon submission analysis, "
-        "problem-statement classification and evidence extraction."
-    ),
-    version="0.1.0"
+    description="AI-assisted hackathon submission analysis, scoring, evidence extraction and shortlist support.",
+    version="0.2.0",
 )
-
-
-# ============================================================
-# CORS
-# ============================================================
-# Allows the frontend to communicate with the FastAPI backend.
 
 app.add_middleware(
     CORSMiddleware,
@@ -35,254 +23,158 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-# ============================================================
-# PATHS
-# ============================================================
-
 ROOT_DIR = Path(__file__).resolve().parents[2]
-
 DATA_DIR = ROOT_DIR / "data"
-
 UPLOAD_DIR = DATA_DIR / "submissions"
-
-UPLOAD_DIR.mkdir(
-    parents=True,
-    exist_ok=True
-)
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
-# ============================================================
-# HEALTH CHECK
-# ============================================================
-
-@app.get("/api/health")
-def health():
-    """
-    Simple API health check.
-    """
-
-    return {
-        "status": "ok",
-        "service": "hackathon-review-copilot",
-        "version": "0.1.0"
-    }
-
-
-# ============================================================
-# ROOT
-# ============================================================
-
-@app.get("/")
-def root():
-    """
-    Basic API information.
-    """
-
-    return {
-        "name": "Hackathon Review Copilot",
-        "version": "0.1.0",
-        "status": "running",
-        "docs": "/docs"
-    }
-
-
-# ============================================================
-# ANALYZE SUBMISSION
-# ============================================================
-
-@app.post("/api/analyze")
-async def analyze_submission(
-    file: UploadFile = File(...)
-):
-    """
-    Upload and analyze a hackathon submission.
-
-    Currently supports:
-        - .pptx
-        - .pdf
-
-    Pipeline:
-
-        Upload
-          ↓
-        Save file
-          ↓
-        Extract text
-          ↓
-        Detect explicit problem statement
-          ↓
-        Semantic classification
-          ↓
-        Return analysis
-    """
-
-    # --------------------------------------------------------
-    # Validate filename
-    # --------------------------------------------------------
-
-    if not file.filename:
-        raise HTTPException(
-            status_code=400,
-            detail="No filename was provided."
-        )
-
-    extension = Path(
-        file.filename
-    ).suffix.lower()
-
-    supported_extensions = {
-        ".pptx",
-        ".pdf"
-    }
-
-    if extension not in supported_extensions:
-
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Unsupported file type. "
-                "Currently supported: PPTX and PDF."
-            )
-        )
-
-    # --------------------------------------------------------
-    # Create safe-ish filename
-    # --------------------------------------------------------
-
-    filename = Path(
-        file.filename
-    ).name
-
-    destination = UPLOAD_DIR / filename
-
-    # --------------------------------------------------------
-    # Save uploaded file
-    # --------------------------------------------------------
-
-    try:
-
-        with destination.open("wb") as buffer:
-
-            shutil.copyfileobj(
-                file.file,
-                buffer
-            )
-
-    except Exception as exc:
-
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to save uploaded file: {exc}"
-        )
-
-    # --------------------------------------------------------
-    # Extract document text
-    # --------------------------------------------------------
-
-    try:
-
-        extracted_text = extract_document(
-            str(destination)
-        )
-
-    except Exception as exc:
-
-        # Remove failed upload if possible
-        try:
-            destination.unlink()
-        except Exception:
-            pass
-
-        raise HTTPException(
-            status_code=500,
-            detail=f"Document extraction failed: {exc}"
-        )
-
-    # --------------------------------------------------------
-    # Validate extraction
-    # --------------------------------------------------------
-
-    if not extracted_text.strip():
-
+def analyze_file(path: Path) -> dict:
+    text = extract_document(str(path))
+    if not text.strip():
         return {
             "success": False,
-            "filename": filename,
-            "message": (
-                "The document was uploaded successfully, "
-                "but no readable text was extracted."
-            ),
+            "filename": path.name,
+            "message": "No readable text was extracted.",
             "classification": None,
+            "evaluation": None,
             "text_length": 0,
-            "extracted_text_preview": ""
         }
 
-    # --------------------------------------------------------
-    # Classify submission
-    # --------------------------------------------------------
-
-    try:
-
-        classification = classify_submission(
-            extracted_text
-        )
-
-    except Exception as exc:
-
-        raise HTTPException(
-            status_code=500,
-            detail=f"Classification failed: {exc}"
-        )
-
-    # --------------------------------------------------------
-    # Return analysis
-    # --------------------------------------------------------
+    classification = classify_submission(text)
+    evaluation = evaluate_submission(text, classification)
 
     return {
         "success": True,
-
-        "filename": filename,
-
-        "file_type": extension,
-
-        "file_path": str(destination),
-
+        "filename": path.name,
+        "file_type": path.suffix.lower(),
+        "file_path": str(path),
         "classification": classification,
-
-        "text_length": len(extracted_text),
-
-        "extracted_text_preview": (
-            extracted_text[:5000]
-        )
+        "evaluation": evaluation,
+        "text_length": len(text),
+        "extracted_text_preview": text[:5000],
     }
 
 
-# ============================================================
-# BATCH / FUTURE ENDPOINT PLACEHOLDER
-# ============================================================
+@app.get("/api/health")
+def health():
+    return {"status": "ok", "service": "hackathon-review-copilot", "version": "0.2.0"}
+
+
+@app.get("/")
+def root():
+    return {"name": "Hackathon Review Copilot", "version": "0.2.0", "status": "running", "docs": "/docs"}
+
+
+@app.post("/api/analyze")
+async def analyze_submission(file: UploadFile = File(...)):
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No filename was provided.")
+
+    extension = Path(file.filename).suffix.lower()
+    if extension not in {".pptx", ".pdf"}:
+        raise HTTPException(status_code=400, detail="Unsupported file type. Currently supported: PPTX and PDF.")
+
+    filename = Path(file.filename).name
+    destination = UPLOAD_DIR / filename
+
+    try:
+        with destination.open("wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        return analyze_file(destination)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        if destination.exists():
+            try:
+                destination.unlink()
+            except Exception:
+                pass
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {exc}")
+
+
+@app.post("/api/analyze-batch")
+async def analyze_batch(files: List[UploadFile] = File(...)):
+    results = []
+
+    for upload in files:
+        if not upload.filename:
+            continue
+
+        extension = Path(upload.filename).suffix.lower()
+        if extension not in {".pptx", ".pdf"}:
+            results.append({
+                "success": False,
+                "filename": upload.filename,
+                "message": "Unsupported file type.",
+            })
+            continue
+
+        destination = UPLOAD_DIR / Path(upload.filename).name
+
+        try:
+            with destination.open("wb") as buffer:
+                shutil.copyfileobj(upload.file, buffer)
+            results.append(analyze_file(destination))
+        except Exception as exc:
+            results.append({
+                "success": False,
+                "filename": upload.filename,
+                "message": f"Analysis failed: {exc}",
+            })
+
+    successful = [r for r in results if r.get("success")]
+    ranked = sorted(
+        successful,
+        key=lambda r: r.get("evaluation", {}).get("final_score", 0),
+        reverse=True,
+    )
+
+    groups = {}
+    for item in successful:
+        problem = item.get("classification", {}).get("primary", "OPEN")
+        groups.setdefault(problem, []).append(item)
+
+    for problem in groups:
+        groups[problem].sort(
+            key=lambda r: r.get("evaluation", {}).get("final_score", 0),
+            reverse=True
+        )
+
+    return {
+        "success": True,
+        "total_received": len(files),
+        "successful": len(successful),
+        "failed": len(results) - len(successful),
+        "ranked": ranked,
+        "groups": {
+            key: {
+                "count": len(value),
+                "teams": [
+                    {
+                        "filename": item["filename"],
+                        "score": item["evaluation"]["final_score"],
+                        "band": item["evaluation"]["band"],
+                        "decision": item["evaluation"]["decision"],
+                        "review_confidence": item["evaluation"]["review_confidence"],
+                    }
+                    for item in value
+                ],
+            }
+            for key, value in groups.items()
+        },
+    }
+
 
 @app.get("/api/submissions")
 def list_submissions():
-    """
-    List currently uploaded submissions.
-
-    This will later become the main submission database
-    endpoint for the reviewer dashboard.
-    """
-
     submissions = []
-
     for file_path in UPLOAD_DIR.iterdir():
-
-        if file_path.is_file():
-
+        if file_path.is_file() and file_path.suffix.lower() in {".pptx", ".pdf"}:
             submissions.append({
                 "filename": file_path.name,
                 "extension": file_path.suffix.lower(),
-                "size_bytes": file_path.stat().st_size
+                "size_bytes": file_path.stat().st_size,
             })
 
-    return {
-        "count": len(submissions),
-        "submissions": submissions
-    }
+    return {"count": len(submissions), "submissions": submissions}
