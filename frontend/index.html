@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hackathon Review Copilot</title>
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div><div class="eyebrow">BYT 24-HOUR HACKATHON</div><h1>Review Copilot</h1></div>
+  <div class="status"><span class="dot"></span><span id="statusText">Ready</span></div>
+</header>
+<main>
+<section class="hero">
+  <div><h2>Shortlist the strongest teams without drowning in decks.</h2><p>Upload submissions, let the evidence-aware baseline score them, then make the final human call.</p></div>
+  <div class="hero-actions"><button id="analyzeBtn" class="primary" disabled>Analyze submissions</button><button id="shortlistBtn" class="secondary">Build Top 30</button></div>
+</section>
+
+<section id="dropzone" class="dropzone">
+  <input id="fileInput" type="file" accept=".pptx,.pdf,.zip" multiple hidden>
+  <div class="upload-icon">↑</div><h3>Drop PPTX, PDF or a ZIP of submissions</h3><p>100+ files are fine. Nothing is sent to a third-party AI service by this local MVP.</p>
+  <button id="chooseBtn" class="secondary">Choose files</button>
+  <div id="queue" class="queue"></div>
+</section>
+
+<section class="stats">
+  <div class="stat"><span>SUBMISSIONS</span><strong id="count">0</strong></div>
+  <div class="stat"><span>AVG SCORE</span><strong id="avg">—</strong></div>
+  <div class="stat"><span>STRONG ≥ 80</span><strong id="strong">0</strong></div>
+  <div class="stat"><span>NEEDS REVIEW</span><strong id="review">0</strong></div>
+  <div class="stat"><span>SHORTLIST</span><strong id="finalists">0 / 30</strong></div>
+</section>
+
+<section class="toolbar">
+  <input id="search" placeholder="Search team / file name…">
+  <select id="problem"><option value="ALL">All problem statements</option></select>
+  <select id="decision"><option value="ALL">All decisions</option><option>RECOMMEND</option><option>REVIEW</option></select>
+  <select id="sort"><option value="score">Score: high to low</option><option value="scoreAsc">Score: low to high</option><option value="name">Name</option></select>
+</section>
+
+<section id="results" class="results">
+  <div class="empty"><div class="empty-mark">◎</div><h3>No submissions analyzed</h3><p>Your judge dashboard will appear here.</p></div>
+</section>
+
+<section id="shortlistPanel" class="shortlist hidden">
+  <div class="section-head"><div><div class="eyebrow">FINALIST ALLOCATION</div><h2>Top 30</h2></div><button id="closeShortlist" class="secondary">Back to review</button></div>
+  <div id="allocation"></div>
+</section>
+</main>
+<footer>AI-assisted review • Human judges make the final decision • Evidence shown from submitted documents</footer>
+<script src="/static/app.js"></script>
+</body>
+</html>
