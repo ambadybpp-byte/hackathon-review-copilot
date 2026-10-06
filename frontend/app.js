@@ -17,18 +17,32 @@ function card(x,i){const e=x.evaluation,c=x.classification,flags=e.flags||[];ret
 function toggleCard(id,btn){const card=document.getElementById(id);const open=card.classList.toggle('open');const buttons=card.querySelectorAll('.expand,.tag-button');buttons.forEach(b=>{if(b.classList.contains('tag-button'))b.textContent=open?'OPEN · evidence':'OPEN';else b.textContent=open?'⌃ Hide evidence':'⌄ View evidence'})}
 function rubric(rs){return '<div class="rubric">'+rs.map(r=>{const points=(r.score*r.weight/100);return '<div class="criterion"><div class="n">'+esc(r.name)+' • '+r.weight+' points</div><strong>'+points.toFixed(1)+' / '+r.weight+'</strong><span class="muted"> ('+r.score+'%)</span><div class="bar"><i style="width:'+r.score+'%"></i></div></div>'}).join('')+'</div>'}
 function evidence(e){let h='<div class="evidence"><h4>Judge evidence</h4>';for(const r of e.rubric){for(const ev of (r.evidence||[]).slice(0,1))h+='<div class="evidence-item"><b>'+esc(r.name)+' '+esc(ev.location)+'</b> · '+esc(ev.snippet)+'</div>'}for(const f of (e.flags||[]))h+='<div class="flag"><b>'+esc(f.type)+'</b> · '+esc(f.location)+' · '+esc(f.reason)+'</div>';return h+'</div>'}
-async function analyze(){if(!state.queue.length){setStatus("Select at least one PPTX, PDF or ZIP first");return}const batch=[...state.queue];setStatus("Uploading "+batch.length+" submission"+(batch.length===1?"":"s")+"…");$("analyzeBtn").disabled=true;$("analyzeBtn").innerHTML='<span>Analyzing…</span><div class="progress"><i></i></div>';try{const fd=new FormData();batch.forEach(f=>fd.append("files",f,f.name));const r=await api('/api/analyze-batch',{method:'POST',body:fd});state.items=r.ranked||[];state.shortlist=null;renderFilters();render();state.queue=[];renderQueue();setStatus((r.successful||0)+" submissions analyzed successfully");}catch(e){setStatus('Analysis failed');$("results").innerHTML='<div class="error">'+esc(e.message)+'</div>'}finally{$("analyzeBtn").disabled=state.queue.length===0;$("analyzeBtn").textContent=state.queue.length?"Analyze "+state.queue.length+" submissions":"Analyze submissions"}}
+async function analyze(){if(!state.queue.length){setStatus("Choose at least one submission first");return}await uploadAndAnalyze([...state.queue])}
+async function uploadAndAnalyze(batch){
+  setStatus("Uploading and analyzing "+batch.length+" submission"+(batch.length===1?"":"s")+"…");
+  $("analyzeBtn").disabled=true;$("analyzeBtn").textContent="Uploading…";
+  try{
+    const fd=new FormData();batch.forEach(f=>fd.append("files",f,f.name));
+    const r=await api("/api/analyze-batch",{method:"POST",body:fd});
+    if(!r.success)throw new Error("Server did not accept the batch");
+    state.items=r.ranked||[];state.shortlist=null;renderFilters();render();
+    state.queue=[];renderQueue();$("analyzeBtn").disabled=true;$("analyzeBtn").textContent="Analyze submissions";
+    setStatus((r.successful||0)+" submissions analyzed successfully");
+  }catch(e){
+    console.error(e);setStatus("Upload failed: "+(e.message||"server error"));
+    $("analyzeBtn").disabled=false;$("analyzeBtn").textContent="Retry upload & analyze";
+  }
+}
 async function buildShortlist(){if(!state.items.length){setStatus('Analyze submissions first');return}setStatus('Building evidence-weighted Top 30…');try{state.shortlist=await api('/api/shortlist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:state.items,limit:30})});$("shortlistPanel").classList.remove('hidden');$("results").classList.add('hidden');renderShortlist();render()}catch(e){setStatus('Shortlist failed')}}
 function renderShortlist(){const a=state.shortlist.allocation||{};$("allocation").innerHTML='<div class="allocation-grid">'+Object.entries(a).map(([k,v])=>'<div class="alloc"><span>'+esc(k)+'</span><strong>'+v+'</strong></div>').join('')+'</div><div class="final-table"><div class="final-row head"><div>#</div><div>Submission</div><div>Score</div><div>Problem</div><div>Status</div></div>'+state.shortlist.selected.map((x,i)=>'<div class="final-row"><div>'+(i+1)+'</div><div><b>'+esc(x.filename)+'</b></div><div>'+x.score+'</div><div>'+esc(x.problem)+'</div><div>'+esc(x.reason)+'</div></div>').join('')+'</div><p class="muted" style="margin-top:12px">'+esc(state.shortlist.rationale)+'</p>'}
-function addFiles(fileList){
+async function addFiles(fileList){
   const incoming=Array.from(fileList||[]).filter(f=>/\.(pptx|pdf|zip)$/i.test(f.name));
   if(!incoming.length){setStatus("No PPTX, PDF or ZIP files selected");return}
   const existing=new Set(state.queue.map(f=>f.name+"|"+f.size));
   state.queue=[...state.queue,...incoming.filter(f=>!existing.has(f.name+"|"+f.size))];
   renderQueue();
-  $("analyzeBtn").disabled=false;
-  $("analyzeBtn").textContent="Analyze "+state.queue.length+" submission"+(state.queue.length===1?"":"s");
-  setStatus(state.queue.length+" file"+(state.queue.length===1?"":"s")+" ready");
+  setStatus(state.queue.length+" file"+(state.queue.length===1?"":"s")+" selected. Starting upload…");
+  await uploadAndAnalyze([...state.queue]);
 }
 $("fileInput").addEventListener("change",e=>{addFiles(e.target.files);e.target.value=""});
 $("dropzone").addEventListener("click",e=>{
