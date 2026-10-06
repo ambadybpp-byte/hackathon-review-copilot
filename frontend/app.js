@@ -19,18 +19,25 @@ function rubric(rs){return '<div class="rubric">'+rs.map(r=>{const points=(r.sco
 function evidence(e){let h='<div class="evidence"><h4>Judge evidence</h4>';for(const r of e.rubric){for(const ev of (r.evidence||[]).slice(0,1))h+='<div class="evidence-item"><b>'+esc(r.name)+' '+esc(ev.location)+'</b> · '+esc(ev.snippet)+'</div>'}for(const f of (e.flags||[]))h+='<div class="flag"><b>'+esc(f.type)+'</b> · '+esc(f.location)+' · '+esc(f.reason)+'</div>';return h+'</div>'}
 async function analyze(){if(!state.queue.length){setStatus("Choose at least one submission first");return}await uploadAndAnalyze([...state.queue])}
 async function uploadAndAnalyze(batch){
-  setStatus("Uploading and analyzing "+batch.length+" submission"+(batch.length===1?"":"s")+"…");
+  setStatus("Connecting to local review server…");
   $("analyzeBtn").disabled=true;$("analyzeBtn").textContent="Uploading…";
+  const fd=new FormData();
+  batch.forEach(f=>fd.append("files",f,f.name));
   try{
-    const fd=new FormData();batch.forEach(f=>fd.append("files",f,f.name));
-    const r=await api("/api/analyze-batch",{method:"POST",body:fd});
-    if(!r.success)throw new Error("Server did not accept the batch");
+    const response=await fetch("/api/analyze-batch",{method:"POST",body:fd});
+    if(!response.ok){
+      const detail=await response.text();
+      throw new Error("Server returned HTTP "+response.status+(detail?" — "+detail.slice(0,180):""));
+    }
+    const r=await response.json();
+    if(!r.success)throw new Error("Server rejected the submission batch");
     state.items=r.ranked||[];state.shortlist=null;renderFilters();render();
     state.queue=[];renderQueue();$("analyzeBtn").disabled=true;$("analyzeBtn").textContent="Analyze submissions";
-    setStatus((r.successful||0)+" submissions analyzed successfully");
+    setStatus((r.successful||0)+" submission"+((r.successful||0)===1?"":"s")+" analyzed successfully");
   }catch(e){
-    console.error(e);setStatus("Upload failed: "+(e.message||"server error"));
-    $("analyzeBtn").disabled=false;$("analyzeBtn").textContent="Retry upload & analyze";
+    console.error("UPLOAD_ERROR",e);
+    $("analyzeBtn").disabled=false;$("analyzeBtn").textContent="Retry upload";
+    setStatus("UPLOAD FAILED: "+(e.message||"Could not reach the server"));
   }
 }
 async function buildShortlist(){if(!state.items.length){setStatus('Analyze submissions first');return}setStatus('Building evidence-weighted Top 30…');try{state.shortlist=await api('/api/shortlist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:state.items,limit:30})});$("shortlistPanel").classList.remove('hidden');$("results").classList.add('hidden');renderShortlist();render()}catch(e){setStatus('Shortlist failed')}}
